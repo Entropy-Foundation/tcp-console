@@ -2,6 +2,16 @@
 name = "tcp-console"
 version = "0.1.0"
 edition = "2021"
+authors = [
+    "Victor Ermolaev <victorermolaev@gmail.com>",
+]
+repository = "https://github.com/vnermolaev/tcp-console"
+documentation = "https://docs.rs/tcp-console/"
+license = "MIT OR Apache-2.0"
+keywords = ["tcp", "console"]
+categories = ["network-programming", "command-line-utilities"]
+description = "A TCP console to send command to running applications"
+readme = "README.md"
 
 [[example]]
 name = "console"
