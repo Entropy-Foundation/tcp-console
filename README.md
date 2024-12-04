@@ -16,6 +16,8 @@ The console server listens for TCP connections on `localhost` (127.0.0.1) and ha
 ---
 
 ## Configuration Example
+The `examples` directory contains an example with the following configuration.
+You may change these options at your convenience.
 
 ```rust
 use tcp_console as console;
@@ -37,7 +39,7 @@ async fn main() -> anyhow::Result<()> {
                 health: "Operational".to_string(),
             },
         )?
-        .only_localhost()
+        .accept_only_localhost()
         .build()?;
 
     console.spawn().await?;
@@ -46,5 +48,11 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 ```
+In this example, `Logger`, `Exec`, and `Status` are types that implement the `Subscription` trait, allowing them to handle specific commands sent to the console.
 
-In this example, `Logger` and `Exec` are types that implement the `Subscription` trait, enabling them to handle specific types of commands sent to the console.
+Additionally, the example launches a separate task that sends three strongly-typed messages to the console. Two of these messages can be processed by existing subscribers, while the third will be reported as unprocessable.
+
+To connect using a third-party client such as `netcat`, run the following command:  
+`nc localhost 3838`
+
+Upon connection, the console will greet you with `"Welcome to TCP console!"`. You can then send any text messages. However, the only text message recognized by `Status` (see `impl Subscription for Status`) is `status`. If this message is received, the status of a mock system will be reported back to `netcat`.

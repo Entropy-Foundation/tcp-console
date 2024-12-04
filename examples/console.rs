@@ -31,6 +31,12 @@ async fn main() -> anyhow::Result<()> {
 
     console.spawn().await?;
 
+    // Send a few strongly-typed messages:
+    // - a message for [Services::Logger]
+    // - a message for [Services::Exec]
+    // - a message for [Services::Unknown],
+    //      no subscription is present for this service,
+    //      [Console] will emit a warning,
     tokio::spawn(async move {
         let client = console::Client::new(
             format!("127.0.0.1:{port}")
@@ -43,14 +49,14 @@ async fn main() -> anyhow::Result<()> {
             .await
             .expect("Failed to send logger message");
 
-        time::sleep(Duration::from_secs(3)).await;
+        time::sleep(Duration::from_secs(2)).await;
 
         client
             .send(Services::Exec, &"Typed ExecMessage")
             .await
             .expect("Failed to send exec message");
 
-        time::sleep(Duration::from_secs(3)).await;
+        time::sleep(Duration::from_secs(2)).await;
 
         client
             .send(Services::Unknown, &"Typed UnknownMessage")
@@ -62,7 +68,7 @@ async fn main() -> anyhow::Result<()> {
 
     console.stop();
 
-    // Let console to actually stop.
+    // Let the console to actually stop.
     time::sleep(Duration::from_millis(100)).await;
 
     Ok(())
@@ -111,7 +117,8 @@ impl Subscription for Exec {
 }
 
 #[derive(Debug)]
-/// A structure representing the status of the system.
+#[allow(dead_code)] // This struct is for demonstration purposes only.
+/// A structure representing the status of some system.
 struct Status {
     connections: u32,
     health: String,
