@@ -11,6 +11,7 @@ pub struct Builder<Services> {
     subscriptions: HashMap<Services, BoxedSubscription>,
     port: Option<u16>,
     welcome: Option<String>,
+    accept_only_localhost: bool,
 }
 
 impl<Services> Builder<Services>
@@ -22,6 +23,7 @@ where
             subscriptions: HashMap::new(),
             port: None,
             welcome: None,
+            accept_only_localhost: false,
         }
     }
 
@@ -51,6 +53,11 @@ where
         self
     }
 
+    pub fn accept_only_localhost(mut self) -> Self {
+        self.accept_only_localhost = true;
+        self
+    }
+
     pub fn build(self) -> Result<Console<Services>, Error> {
         let Some(port) = self.port else {
             return Err(Error::NoPort);
@@ -60,6 +67,7 @@ where
             self.subscriptions,
             port,
             ensure_newline(self.welcome.unwrap_or_default()),
+            self.accept_only_localhost
         ))
     }
 }

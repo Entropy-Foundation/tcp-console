@@ -26,6 +26,7 @@ async fn main() -> anyhow::Result<()> {
                 health: "Operational".to_string(),
             },
         )?
+        .accept_only_localhost()
         .build()?;
 
     console.spawn().await?;
@@ -118,7 +119,7 @@ struct Status {
 
 #[async_trait]
 impl Subscription for Status {
-    async fn handle(&self, message: Bytes) -> Result<Option<String>, SubscriptionError> {
+    async fn handle(&self, _message: Bytes) -> Result<Option<String>, SubscriptionError> {
         debug!("[Status] request to process a strongly typed message");
 
         Ok(Some(format!("{self:#?}")))

@@ -27,6 +27,7 @@ pub struct Console<Services> {
 struct Inner<Services> {
     subscriptions: HashMap<Services, BoxedSubscription>,
     welcome: String,
+    accept_only_localhost: bool,
 }
 
 impl<Services> Console<Services> {
@@ -34,11 +35,13 @@ impl<Services> Console<Services> {
         subscriptions: HashMap<Services, BoxedSubscription>,
         port: u16,
         welcome: String,
+        accept_only_localhost: bool,
     ) -> Self {
         Self {
             inner: Arc::new(Inner {
                 subscriptions,
                 welcome,
+                accept_only_localhost,
             }),
             port,
             stop: Arc::new(Notify::new()),
@@ -84,7 +87,7 @@ where
                     warn!("Could not get peer address. Closing the connection.");
                     continue;
                 };
-                if !addr.ip().is_loopback() {
+                if inner.accept_only_localhost && !addr.ip().is_loopback() {
                     warn!("Only connection from the localhost are allowed. Connected peer address {addr}. Closing the connection.");
                     continue;
                 }

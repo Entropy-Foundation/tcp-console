@@ -30,6 +30,14 @@ async fn main() -> anyhow::Result<()> {
         .welcome("Welcome to TCP console!")
         .subscribe(Services::Logger, Logger)?
         .subscribe(Services::Exec, Exec)?
+        .subscribe(
+            Services::Status,
+            Status {
+                connections: 11,
+                health: "Operational".to_string(),
+            },
+        )?
+        .only_localhost()
         .build()?;
 
     console.spawn().await?;
