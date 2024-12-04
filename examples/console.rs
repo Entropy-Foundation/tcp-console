@@ -19,6 +19,13 @@ async fn main() -> anyhow::Result<()> {
         .welcome("Welcome to TCP console!")
         .subscribe(Services::Logger, Logger)?
         .subscribe(Services::Exec, Exec)?
+        .subscribe(
+            Services::Status,
+            Status {
+                connections: 11,
+                health: "Operational".to_string(),
+            },
+        )?
         .build()?;
 
     console.spawn().await?;
@@ -64,23 +71,24 @@ async fn main() -> anyhow::Result<()> {
 enum Services {
     Logger,
     Exec,
-    Unknown
+    Status,
+    Unknown,
 }
 
 struct Logger;
 
 #[async_trait]
 impl Subscription for Logger {
-    async fn handle(&self, message: Bytes) -> Result<(), SubscriptionError> {
+    async fn handle(&self, message: Bytes) -> Result<Option<String>, SubscriptionError> {
         let message =
             bcs::from_bytes::<String>(message.as_ref()).expect("Must deserialize message");
-        debug!("[Logger] strongly type message: {message}");
-        Ok(())
+        debug!("[Logger] request to process a strongly typed message: {message}");
+        Ok(None)
     }
 
-    async fn weak_handle(&self, message: &str) -> Result<(), SubscriptionError> {
+    async fn weak_handle(&self, message: &str) -> Result<Option<String>, SubscriptionError> {
         debug!("[Logger] request to process a text message: {message}");
-        Ok(())
+        Ok(None)
     }
 }
 
@@ -88,16 +96,42 @@ struct Exec;
 
 #[async_trait]
 impl Subscription for Exec {
-    async fn handle(&self, message: Bytes) -> Result<(), SubscriptionError> {
+    async fn handle(&self, message: Bytes) -> Result<Option<String>, SubscriptionError> {
         let message =
             bcs::from_bytes::<String>(message.as_ref()).expect("Must deserialize message");
-        debug!("[Exec] strongly type message: {message}");
-        Ok(())
+        debug!("[Exec] request to process a strongly typed message: {message}");
+        Ok(None)
     }
 
-    async fn weak_handle(&self, message: &str) -> Result<(), SubscriptionError> {
+    async fn weak_handle(&self, message: &str) -> Result<Option<String>, SubscriptionError> {
         debug!("[Exec] request to process a text message: {message}");
-        Ok(())
+        Ok(None)
+    }
+}
+
+#[derive(Debug)]
+/// A structure representing the status of the system.
+struct Status {
+    connections: u32,
+    health: String,
+}
+
+#[async_trait]
+impl Subscription for Status {
+    async fn handle(&self, message: Bytes) -> Result<Option<String>, SubscriptionError> {
+        debug!("[Status] request to process a strongly typed message");
+
+        Ok(Some(format!("{self:#?}")))
+    }
+
+    async fn weak_handle(&self, message: &str) -> Result<Option<String>, SubscriptionError> {
+        debug!("[Status] request to process a text message: {message}");
+
+        Ok(if message == "status" {
+            Some(format!("{self:#?}"))
+        } else {
+            None
+        })
     }
 }
 

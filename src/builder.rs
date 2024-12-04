@@ -1,4 +1,5 @@
 use crate::console::{Console, Error};
+use crate::ensure_newline;
 use crate::subscription::{BoxedSubscription, Subscription};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
@@ -58,7 +59,7 @@ where
         Ok(Console::new(
             self.subscriptions,
             port,
-            format!("{}\n", self.welcome.unwrap_or_default()),
+            ensure_newline(self.welcome.unwrap_or_default()),
         ))
     }
 }

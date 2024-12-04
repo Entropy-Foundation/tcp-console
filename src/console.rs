@@ -1,3 +1,4 @@
+use crate::ensure_newline;
 use crate::subscription::BoxedSubscription;
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
@@ -14,6 +15,7 @@ use tokio_util::codec::{BytesCodec, Framed};
 use tracing::{debug, warn};
 
 /// A TCP console to process both strongly typed and free form messages.
+/// Free form messages are sent to all known subscriptions in random order until the _first_ success.
 ///
 /// This console only allows message from localhost.
 pub struct Console<Services> {
@@ -122,45 +124,14 @@ where
         let _ = bytes_stream.send(vec).await;
 
         loop {
-            tokio::select! {
+            let bytes = tokio::select! {
                 _ = stop.notified() => {
                     debug!("Stopping session for {addr}");
                     return;
                 }
                 result = bytes_stream.next() => match result {
                     Some(Ok(bytes)) => {
-                        let bytes = bytes.freeze();
-
-                        match bcs::from_bytes::<Message<Services>>(bytes.as_ref()) {
-                            Ok(Message {service_id, bytes}) => {
-                                // Message is strongly typed.
-
-                                debug!("Received message for {service_id:?}");
-
-                                if let Some(subscription) = inner.subscriptions.get(&service_id) {
-                                    debug!("Found subscription for service {service_id:?}");
-                                    if let Err(err) = subscription.handle(bytes).await {
-                                        warn!("Error handling message: {err}");
-                                    }
-                                } else {
-                                    warn!("No subscription found for service {service_id:?}. Ignoring the message.");
-                                }
-                            }
-                            Err(_err) => {
-                                // Message is not strongly typed and probably came from netcat or a similar client.
-                                // Try all subscriptions to make sense of it.
-
-                                let text = String::from_utf8_lossy(bytes.as_ref());
-                                debug!("Received message is not typed. Treating it as text: {}", text.trim());
-
-                                for subscription in inner.subscriptions.values() {
-                                    if let Err(err) = subscription.weak_handle(text.trim()).await {
-                                        warn!("Error handling message: {err}");
-                                    }
-                                }
-
-                            }
-                        }
+                        bytes.freeze()
                     }
                     Some(Err(err)) => {
                         warn!("Error while receiving bytes: {err}. Received bytes will not be processed");
@@ -169,7 +140,53 @@ where
                     None => {
                         // Connection closed.
                         debug!("Connection closed by {addr}");
-                        break;
+                        return;
+                    }
+                }
+            };
+
+            match bcs::from_bytes::<Message<Services>>(bytes.as_ref()) {
+                Ok(Message { service_id, bytes }) => {
+                    // Message is strongly typed.
+
+                    debug!("Received message for {service_id:?}");
+
+                    if let Some(subscription) = inner.subscriptions.get(&service_id) {
+                        debug!("Found subscription for service {service_id:?}");
+
+                        match subscription.handle(bytes).await {
+                            Ok(None) => {}
+                            Ok(Some(message)) => {
+                                let vec: Bytes = message.as_bytes().to_vec().into();
+                                let _ = bytes_stream.send(vec).await;
+                            }
+                            Err(err) => warn!("Error handling message: {err}"),
+                        }
+                    } else {
+                        warn!("No subscription found for service {service_id:?}. Ignoring the message.");
+                    }
+                }
+                Err(_err) => {
+                    // Message is not strongly typed and probably came from netcat or a similar client.
+                    // Try all subscriptions to make sense of it until the FIRST success.
+
+                    let text = String::from_utf8_lossy(bytes.as_ref()).trim().to_string();
+                    debug!("Received message is not typed. Treating it as text: {text}");
+
+                    for (service_id, subscription) in &inner.subscriptions {
+                        match subscription.weak_handle(&text).await {
+                            Ok(None) => {
+                                continue;
+                            }
+                            Ok(Some(message)) => {
+                                let vec: Bytes = ensure_newline(message).as_bytes().to_vec().into();
+                                let _ = bytes_stream.send(vec).await;
+                                break;
+                            }
+                            Err(err) => {
+                                warn!("Service {service_id:?} failed to handle message: {err}")
+                            }
+                        }
                     }
                 }
             }
