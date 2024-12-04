@@ -11,18 +11,18 @@ The console server listens for TCP connections on `localhost` (127.0.0.1) and ha
 - **Command Injection**: Allows external control of an application via TCP.
 - **Supports Typed and Text Commands**: Accepts strongly-typed commands and plain text commands for quick use cases.
 - **Async Networking**: Uses `tokio` for handling multiple simultaneous connections efficiently.
-- **Examples Provided**: The `examples` directory contains a demonstration of both plain text and structured command handling.
+- **Examples Provided**: The `examples` directory contains a demonstration of both plain text and structured command handling. One of the command handlers is showcased to report data to the remote connection.
 
 ---
 
 ## Configuration Example
 
 ```rust
-use your_project::console;
-use your_project::services::{Logger, Exec, Subscription};
+use tcp_console as console;
+use tcp_console::Subscription;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> anyhow::Result<()> {
     let port = 3838;
 
     let console = console::Builder::new()
