@@ -32,17 +32,30 @@ async fn main() -> anyhow::Result<()> {
     console.spawn().await?;
 
     // Send a few strongly-typed messages:
+    // - a text message to [Services::Status]
     // - a message for [Services::Logger]
     // - a message for [Services::Exec]
     // - a message for [Services::Unknown],
     //      no subscription is present for this service,
     //      [Console] will emit a warning,
     tokio::spawn(async move {
-        let client = console::Client::new(
+        let mut client = console::Client::new(
             format!("127.0.0.1:{port}")
                 .parse()
                 .expect("Failed to parse socket address"),
-        );
+        )
+        .await
+        .expect("Failed to create client");
+
+        client
+            .weak_send("status")
+            .await
+            .expect("Failed to send unknown message");
+
+        let status = client.weak_read().await.expect("Failed to read");
+        debug!("{status:?}");
+
+        time::sleep(Duration::from_secs(2)).await;
 
         client
             .send(Services::Logger, &"Typed LoggerMessage")
@@ -86,15 +99,14 @@ struct Logger;
 
 #[async_trait]
 impl Subscription for Logger {
-    async fn handle(&self, message: Bytes) -> Result<Option<String>, SubscriptionError> {
+    async fn handle(&self, message: Bytes) -> Result<Option<Bytes>, SubscriptionError> {
         let message =
             bcs::from_bytes::<String>(message.as_ref()).expect("Must deserialize message");
-        debug!("[Logger] request to process a strongly typed message: {message}");
+        debug!("[Logger] request to process a strongly typed message: `{message}`");
         Ok(None)
     }
 
-    async fn weak_handle(&self, message: &str) -> Result<Option<String>, SubscriptionError> {
-        debug!("[Logger] request to process a text message: {message}");
+    async fn weak_handle(&self, _message: &str) -> Result<Option<String>, SubscriptionError> {
         Ok(None)
     }
 }
@@ -103,15 +115,14 @@ struct Exec;
 
 #[async_trait]
 impl Subscription for Exec {
-    async fn handle(&self, message: Bytes) -> Result<Option<String>, SubscriptionError> {
+    async fn handle(&self, message: Bytes) -> Result<Option<Bytes>, SubscriptionError> {
         let message =
             bcs::from_bytes::<String>(message.as_ref()).expect("Must deserialize message");
-        debug!("[Exec] request to process a strongly typed message: {message}");
+        debug!("[Exec] request to process a strongly typed message: `{message}`");
         Ok(None)
     }
 
-    async fn weak_handle(&self, message: &str) -> Result<Option<String>, SubscriptionError> {
-        debug!("[Exec] request to process a text message: {message}");
+    async fn weak_handle(&self, _message: &str) -> Result<Option<String>, SubscriptionError> {
         Ok(None)
     }
 }
@@ -126,15 +137,13 @@ struct Status {
 
 #[async_trait]
 impl Subscription for Status {
-    async fn handle(&self, _message: Bytes) -> Result<Option<String>, SubscriptionError> {
+    async fn handle(&self, _message: Bytes) -> Result<Option<Bytes>, SubscriptionError> {
         debug!("[Status] request to process a strongly typed message");
 
-        Ok(Some(format!("{self:#?}")))
+        Ok(None)
     }
 
     async fn weak_handle(&self, message: &str) -> Result<Option<String>, SubscriptionError> {
-        debug!("[Status] request to process a text message: {message}");
-
         Ok(if message == "status" {
             Some(format!("{self:#?}"))
         } else {

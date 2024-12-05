@@ -6,8 +6,8 @@ use bytes::Bytes;
 pub trait Subscription {
     /// Handles strongly-typed messages.
     ///
-    /// Return an optional [String] that will be sent back to the message sender.
-    async fn handle(&self, message: Bytes) -> Result<Option<String>, SubscriptionError>;
+    /// Return optional [Bytes] that will be sent back to the message sender.
+    async fn handle(&self, message: Bytes) -> Result<Option<Bytes>, SubscriptionError>;
 
     /// Handles free-form text messages.
     ///

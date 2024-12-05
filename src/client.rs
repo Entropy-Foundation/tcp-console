@@ -1,42 +1,65 @@
 use crate::console::Message;
+use bytes::Bytes;
+use futures_util::{SinkExt, StreamExt};
 use serde::Serialize;
 use std::net::SocketAddr;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
+use tokio_util::codec::{BytesCodec, Framed};
 use tracing::debug;
 
 /// Client for [Console].
 pub struct Client {
-    address: SocketAddr,
+    stream: Framed<TcpStream, BytesCodec>,
 }
 
 impl Client {
-    pub fn new(address: SocketAddr) -> Self {
-        Self { address }
+    pub async fn new(address: SocketAddr) -> anyhow::Result<Self> {
+        // Connect to the TCP console server.
+        let mut stream = Framed::new(TcpStream::connect(address).await?, BytesCodec::new());
+        debug!("Connected to server");
+
+        // Receive the welcome message.
+        match stream.next().await {
+            Some(Ok(_bytes)) => Ok(Client { stream }),
+            Some(Err(e)) => Err(anyhow::Error::from(e)),
+            None => Err(anyhow::Error::msg("Connection closed unexpectedly")),
+        }
     }
 
     /// Sends a message to [Console] with any serializable payload.
     pub async fn send<S: Serialize, M: Serialize>(
-        &self,
+        &mut self,
         service_id: S,
         message: &M,
     ) -> anyhow::Result<()> {
         let console_message = Message::new(service_id, message)?;
 
-        // Connect to the TCP console server.
-        let mut stream = TcpStream::connect(self.address).await?;
-        debug!("Connected to server");
-
-        // Receive the welcome message
-        let mut welcome = vec![0; 512];
-        let _ = stream.read(&mut welcome).await?;
-
         // Create bytes to send.
-        let bytes = bcs::to_bytes(&console_message)?;
+        let bytes: Bytes = bcs::to_bytes(&console_message)?.into();
 
         // Send bytes.
-        stream.write_all(&bytes).await?;
+        self.stream.send(bytes).await?;
 
         Ok(())
+    }
+
+    /// Sends a message to [Console] with any text.
+    pub async fn weak_send(&mut self, message: &str) -> anyhow::Result<()> {
+        let bytes: Bytes = message.as_bytes().to_vec().into();
+        self.stream.send(bytes).await?;
+
+        Ok(())
+    }
+
+    /// Receives a text message from [Console].
+    pub async fn weak_read(&mut self) -> anyhow::Result<String> {
+        let bytes = self
+            .stream
+            .next()
+            .await
+            .ok_or(anyhow::anyhow!("Connection closed unexpectedly"))??
+            .freeze();
+
+        Ok(String::from_utf8_lossy(bytes.as_ref()).trim().to_string())
     }
 }

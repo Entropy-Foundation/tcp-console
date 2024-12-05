@@ -67,7 +67,7 @@ where
             self.subscriptions,
             port,
             ensure_newline(self.welcome.unwrap_or_default()),
-            self.accept_only_localhost
+            self.accept_only_localhost,
         ))
     }
 }

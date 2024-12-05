@@ -123,8 +123,10 @@ where
 
         let mut bytes_stream = Framed::new(stream, BytesCodec::new());
 
-        let vec: Bytes = inner.welcome.as_bytes().to_vec().into();
-        let _ = bytes_stream.send(vec).await;
+        debug!("Welcoming {addr}");
+        let bytes: Bytes = inner.welcome.as_bytes().to_vec().into();
+        let _ = bytes_stream.send(bytes).await;
+        debug!("Finished welcoming {addr}");
 
         loop {
             let bytes = tokio::select! {
@@ -159,9 +161,8 @@ where
 
                         match subscription.handle(bytes).await {
                             Ok(None) => {}
-                            Ok(Some(message)) => {
-                                let vec: Bytes = message.as_bytes().to_vec().into();
-                                let _ = bytes_stream.send(vec).await;
+                            Ok(Some(bytes)) => {
+                                let _ = bytes_stream.send(bytes).await;
                             }
                             Err(err) => warn!("Error handling message: {err}"),
                         }
@@ -177,17 +178,21 @@ where
                     debug!("Received message is not typed. Treating it as text: {text}");
 
                     for (service_id, subscription) in &inner.subscriptions {
+                        debug!("[{service_id:?}] request to process text message: `{text}`");
+
                         match subscription.weak_handle(&text).await {
                             Ok(None) => {
                                 continue;
                             }
                             Ok(Some(message)) => {
+                                debug!("[{service_id:?}] Message processed");
                                 let vec: Bytes = ensure_newline(message).as_bytes().to_vec().into();
                                 let _ = bytes_stream.send(vec).await;
                                 break;
                             }
                             Err(err) => {
-                                warn!("Service {service_id:?} failed to handle message: {err}")
+                                warn!("Service {service_id:?} failed to handle message: {err}");
+                                continue;
                             }
                         }
                     }
