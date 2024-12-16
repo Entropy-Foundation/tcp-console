@@ -5,23 +5,25 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
+use tokio::net::ToSocketAddrs;
 
 /// A builder for [Console].
-pub struct Builder<Services> {
+pub struct Builder<Services, A> {
     subscriptions: HashMap<Services, BoxedSubscription>,
-    port: Option<u16>,
+    bind_address: Option<A>,
     welcome: Option<String>,
     accept_only_localhost: bool,
 }
 
-impl<Services> Builder<Services>
+impl<Services, A> Builder<Services, A>
 where
     Services: Eq + Hash + Debug,
+    A: ToSocketAddrs,
 {
     pub fn new() -> Self {
         Self {
             subscriptions: HashMap::new(),
-            port: None,
+            bind_address: None,
             welcome: None,
             accept_only_localhost: false,
         }
@@ -43,8 +45,8 @@ where
         }
     }
 
-    pub fn port(mut self, port: u16) -> Self {
-        self.port = Some(port);
+    pub fn bind_address(mut self, bind_address: A) -> Self {
+        self.bind_address = Some(bind_address);
         self
     }
 
@@ -58,23 +60,24 @@ where
         self
     }
 
-    pub fn build(self) -> Result<Console<Services>, Error> {
-        let Some(port) = self.port else {
-            return Err(Error::NoPort);
+    pub fn build(self) -> Result<Console<Services, A>, Error> {
+        let Some(bind_address) = self.bind_address else {
+            return Err(Error::NoBindAddress);
         };
 
         Ok(Console::new(
             self.subscriptions,
-            port,
+            bind_address,
             ensure_newline(self.welcome.unwrap_or_default()),
             self.accept_only_localhost,
         ))
     }
 }
 
-impl<Services> Default for Builder<Services>
+impl<Services, A> Default for Builder<Services, A>
 where
     Services: Eq + Hash + Debug,
+    A: ToSocketAddrs,
 {
     fn default() -> Self {
         Self::new()

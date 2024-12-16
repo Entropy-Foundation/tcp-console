@@ -9,7 +9,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::sync::Arc;
 use thiserror::Error;
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::sync::Notify;
 use tokio_util::codec::{BytesCodec, Framed};
 use tracing::{debug, warn};
@@ -18,9 +18,9 @@ use tracing::{debug, warn};
 /// Free form messages are sent to all known subscriptions in random order until the _first_ success.
 ///
 /// This console only allows message from localhost.
-pub struct Console<Services> {
+pub struct Console<Services, A> {
     inner: Arc<Inner<Services>>,
-    port: u16,
+    bind_address: Option<A>,
     stop: Arc<Notify>,
 }
 
@@ -30,10 +30,10 @@ struct Inner<Services> {
     accept_only_localhost: bool,
 }
 
-impl<Services> Console<Services> {
+impl<Services, A> Console<Services, A> {
     pub(crate) fn new(
         subscriptions: HashMap<Services, BoxedSubscription>,
-        port: u16,
+        bind_address: A,
         welcome: String,
         accept_only_localhost: bool,
     ) -> Self {
@@ -43,20 +43,24 @@ impl<Services> Console<Services> {
                 welcome,
                 accept_only_localhost,
             }),
-            port,
+            bind_address: Some(bind_address),
             stop: Arc::new(Notify::new()),
         }
     }
 }
-impl<Services> Console<Services>
+impl<Services, A> Console<Services, A>
 where
     Services: DeserializeOwned + Eq + Hash + Debug + Send + Sync + 'static,
+    A: ToSocketAddrs + 'static,
 {
-    const LOCALHOST: &'static str = "localhost";
+    /// Spawn the console by opening a TCP socket at the specified address.
+    pub async fn spawn(&mut self) -> Result<(), Error> {
+        let Some(bind_address) = self.bind_address.take() else {
+            warn!("Console has already started");
+            return Err(Error::AlreadyStarted);
+        };
 
-    /// Spawn the console by opening a TCP socket at the specified port.
-    pub async fn spawn(&self) -> Result<(), Error> {
-        let listener = TcpListener::bind((Self::LOCALHOST, self.port)).await?;
+        let listener = TcpListener::bind(bind_address).await?;
         let inner = self.inner.clone();
         let stop = self.stop.clone();
 
@@ -223,8 +227,10 @@ impl<Services> Message<Services> {
 pub enum Error {
     #[error("Subscription cannot be registered: service id `{0}` is already in use")]
     ServiceIdUsed(String),
-    #[error("Console port is not specified")]
-    NoPort,
+    #[error("Console bind address is not specified")]
+    NoBindAddress,
+    #[error("Console had already started")]
+    AlreadyStarted,
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
     #[error("Serde error: {0}")]

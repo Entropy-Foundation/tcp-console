@@ -1,3 +1,4 @@
+use std::net::Ipv4Addr;
 use async_trait::async_trait;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
@@ -14,8 +15,8 @@ async fn main() -> anyhow::Result<()> {
 
     let port = 3838;
 
-    let console = console::Builder::new()
-        .port(port)
+    let mut console = console::Builder::new()
+        .bind_address((Ipv4Addr::LOCALHOST, port))
         .welcome("Welcome to TCP console!")
         .subscribe(Services::Logger, Logger)?
         .subscribe(Services::Exec, Exec)?
@@ -40,9 +41,7 @@ async fn main() -> anyhow::Result<()> {
     //      [Console] will emit a warning,
     tokio::spawn(async move {
         let mut client = console::Client::new(
-            format!("127.0.0.1:{port}")
-                .parse()
-                .expect("Failed to parse socket address"),
+            (Ipv4Addr::LOCALHOST, port)
         )
         .await
         .expect("Failed to create client");
